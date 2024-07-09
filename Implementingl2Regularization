@@ -1,0 +1,65 @@
+#Training with l2 regularization
+
+#Cost computing function with l2
+def compute_cost_l2(X, y_true, W, b, lambd=0.1):
+  m = len(y_true)
+  predictions = predict(X, W, b)
+  cost = np.sum((predictions - y_true) ** 2) / (2 * m)
+  l2_term = (lambd / (2 * m)) * np.sum(W ** 2)
+
+  return cost + l2_term
+
+def compute_gradient_Adams_l2(X, y_true, W, b, iteration, alpha=0.01, beta1=0.9, beta2=0.999, dW_rmsprop=np.zeros(len(W)), db_rmsprop=0, dW_momentum=np.zeros(len(W)), db_momentum=0, lambd=0.1):
+  dW = np.dot(X.T, (predict(X, W, b) - y_true)) / len(y_true) + ((lambd/len(y_true)) * W)
+  db = np.sum(y_true - predict(X, W, b)) / len(y_true)
+
+  #Calculating momentum
+  dW_momentum = beta1 * dW_momentum + (1 - beta1) * dW
+  db_momentum = beta1 * db_momentum + (1 - beta1) * db
+
+  #Calculating rmsprop
+  dW_rmsprop = beta2 * dW_rmsprop + (1 - beta2) * dW ** 2
+  db_rmsprop = beta2 * db_rmsprop + (1 - beta2) * db ** 2
+
+  #Bias correction
+  dW_momentum = dW_momentum / (1 - beta1 ** iteration)
+  db_momentum = db_momentum / (1 - beta1 ** iteration)
+  dW_rmsprop = dW_rmsprop / (1 - beta2 ** iteration)
+  db_rmsprop = db_rmsprop / (1 - beta2 ** iteration)
+
+  #Combining rmsprop and momentum
+  epsilon = 1e-8 #Very small value to prevent from dividing by 0
+
+  dW_corrected = dW_momentum / np.sqrt(dW_rmsprop + epsilon)
+  db_corrected = db_momentum / np.sqrt(db_rmsprop + epsilon)
+
+  return dW_corrected, db_corrected
+
+#Training function
+def train_l2(X_train, y_train, W, b, learning_rate, num_iterations):
+  traincost_history = []
+  valcost_history = []
+  minimum = 9999999
+
+  for i in range(1, num_iterations+1):
+    dW, db = compute_gradient_Adams_l2(X_train, y_train, W, b, i)
+    W = W - (learning_rate * dW)
+    b = b - (learning_rate * db)
+    train_cost = compute_cost_l2(X_train, y_train, W, b)
+
+    if(train_cost < minimum):
+      minimum = train_cost
+    
+    #Early stopping to prevent overfitting
+    if(len(traincost_history) != 0 and train_cost > minimum + 0.1):
+      print('Stopping...')
+      break
+
+    
+    print(f"Iteration {i}: Training Cost = {train_cost}")
+    print(f"Iteration {i}: Validation Cost = {compute_cost_l2(X_test, y_test, W, b)}")
+
+    traincost_history.append(train_cost)
+    valcost_history.append(compute_cost_l2(X_test, y_test, W, b))
+
+  return W, b, traincost_history, valcost_history
